@@ -265,7 +265,7 @@ async def load_align_model_cached(
         selected_model_name = config.alignment.models[language_code]
         logger.info(f"Using configured alignment model for '{language_code}': {selected_model_name}")
     elif language_code == "id":
-        selected_model_name = "voidful/wav2vec2-xlsr-53-mms-id"
+        selected_model_name = "indonesian-nlp/wav2vec2-large-xlsr-indonesian"
         logger.info(f"Using default alignment model for 'id': {selected_model_name}")
 
     # Decide how to key the cache
