@@ -257,7 +257,6 @@ async def load_align_model_cached(
     await _cleanup_alignment_cache_whitelist()
 
     inference_device = _determine_inference_device()
-
     selected_model_name = model_name
     if "multilingual" in config.alignment.models:
         selected_model_name = config.alignment.models["multilingual"]
@@ -265,6 +264,9 @@ async def load_align_model_cached(
     elif language_code in config.alignment.models:
         selected_model_name = config.alignment.models[language_code]
         logger.info(f"Using configured alignment model for '{language_code}': {selected_model_name}")
+    elif language_code == "id":
+        selected_model_name = "voidful/wav2vec2-xlsr-53-mms-id"
+        logger.info(f"Using default alignment model for 'id': {selected_model_name}")
 
     # Decide how to key the cache
     if (selected_model_name is not None
