@@ -118,6 +118,7 @@ async def transcribe_audio(
     chunk_size: Annotated[int, Form()] = 30,
     vad_onset: Annotated[float, Form()] = 0.500,
     vad_offset: Annotated[float, Form()] = 0.363,
+    no_speech_threshold: Annotated[float, Form()] = 0.6,
 ) -> Response:
     model, language, response_format = apply_defaults(config, model, language, response_format)
     timestamp_granularities = await get_timestamp_granularities(request)
@@ -139,7 +140,8 @@ async def transcribe_audio(
         diarize: {diarize}, \
         chunk_size: {chunk_size}, \
         vad_onset: {vad_onset}, \
-        vad_offset: {vad_offset}")
+        vad_offset: {vad_offset}, \
+        no_speech_threshold: {no_speech_threshold}")
     
     if not align:
         if response_format in ('vtt', 'srt', 'aud', 'vtt_json'):
@@ -164,6 +166,7 @@ async def transcribe_audio(
         "word_timestamps": word_timestamps,
         "initial_prompt": prompt,
         "hotwords": hotwords,
+        "no_speech_threshold": no_speech_threshold,
     }
 
     model_load_time = time.time()
