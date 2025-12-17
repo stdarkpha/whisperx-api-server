@@ -197,26 +197,7 @@ async def load_transcribe_pipeline_cached(
     )
 
     def _init_pipeline():
-        try:
-            # Import semua class omegaconf yang mungkin ada di checkpoint
-            from omegaconf.listconfig import ListConfig
-            from omegaconf.dictconfig import DictConfig
-            from omegaconf.base import ContainerMetadata
-            
-            # Tambahkan ContainerMetadata dan DictConfig ke safe_globals
-            with torch.serialization.safe_globals([ListConfig, DictConfig, ContainerMetadata]):
-                return whisperx_transcribe.load_model(
-                    whisper_arch=whispermodel.model_size_or_path,
-                    device=whispermodel.device,
-                    compute_type=whispermodel.compute_type,
-                    language=language,
-                    vad_model=config.whisper.vad_model,
-                    vad_method=config.whisper.vad_method,
-                    vad_options=effective_vad_options,
-                    task=task,
-                )
-        except ImportError:
-            # Fallback (biasanya tidak terpanggil jika library terinstall)
+        def _load_model_unsafe():
             return whisperx_transcribe.load_model(
                 whisper_arch=whispermodel.model_size_or_path,
                 device=whispermodel.device,
@@ -227,23 +208,33 @@ async def load_transcribe_pipeline_cached(
                 vad_options=effective_vad_options,
                 task=task,
             )
+
+        try:
+            # Try loading with specific allowed globals
+            from omegaconf.listconfig import ListConfig
+            from omegaconf.dictconfig import DictConfig
+            from omegaconf.base import ContainerMetadata
+            import typing
+            
+            # Add typing.Any and others to safe globals
+            with torch.serialization.safe_globals([ListConfig, DictConfig, ContainerMetadata, typing.Any]):
+                return _load_model_unsafe()
         except Exception as e:
-            # Fallback terakhir jika safe_globals gagal, coba monkey patch torch.load (Sangat berisiko, gunakan hanya jika terpaksa)
-            logger.warning(f"Standard loading failed, attempting unsafe load due to: {e}")
+            logger.warning(f"Standard safe loading failed ({e}). Falling back to weights_only=False.")
+            
+            # Robust Monkey Patch for torch.load
             original_load = torch.load
-            torch.load = lambda *args, **kwargs: original_load(*args, **kwargs, weights_only=False)
+            
+            def unsafe_load(*args, **kwargs):
+                # Force weights_only=False to allow loading older pickled models
+                kwargs["weights_only"] = False
+                return original_load(*args, **kwargs)
+            
+            torch.load = unsafe_load
             try:
-                return whisperx_transcribe.load_model(
-                    whisper_arch=whispermodel.model_size_or_path,
-                    device=whispermodel.device,
-                    compute_type=whispermodel.compute_type,
-                    language=language,
-                    vad_model=config.whisper.vad_model,
-                    vad_method=config.whisper.vad_method,
-                    vad_options=effective_vad_options,
-                    task=task,
-                )
+                return _load_model_unsafe()
             finally:
+                # Always restore the original touch.load
                 torch.load = original_load
 
     pipeline = await _get_or_init_model(
