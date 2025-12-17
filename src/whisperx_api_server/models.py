@@ -197,46 +197,69 @@ async def load_transcribe_pipeline_cached(
     )
 
     def _init_pipeline():
-        def _load_model_unsafe():
-            return whisperx_transcribe.load_model(
-                whisper_arch=whispermodel.model_size_or_path,
-                device=whispermodel.device,
-                compute_type=whispermodel.compute_type,
-                language=language,
-                vad_model=config.whisper.vad_model,
-                vad_method=config.whisper.vad_method,
-                vad_options=effective_vad_options,
-                task=task,
-            )
-
+        # Simpan referensi fungsi load asli agar bisa dikembalikan nanti
+        original_load = torch.load
+        
         try:
-            # Try loading with specific allowed globals
+            # 1. Import semua class yang sering muncul di checkpoint Pyannote/Whisper
+            import typing
+            import numpy as np
             from omegaconf.listconfig import ListConfig
             from omegaconf.dictconfig import DictConfig
             from omegaconf.base import ContainerMetadata
-            import typing
             
-            # Add typing.Any and others to safe globals
-            with torch.serialization.safe_globals([ListConfig, DictConfig, ContainerMetadata, typing.Any]):
-                return _load_model_unsafe()
+            # 2. Definisikan daftar class yang diizinkan (Safe Globals)
+            # Kita tambahkan typing.Any dan numpy.dtype untuk mencegah error selanjutnya
+            safe_classes = [
+                ListConfig, 
+                DictConfig, 
+                ContainerMetadata, 
+                typing.Any,
+                np.dtype,
+                set,
+            ]
+            
+            # 3. Coba load model dengan whitelist keamanan
+            with torch.serialization.safe_globals(safe_classes):
+                return whisperx_transcribe.load_model(
+                    whisper_arch=whispermodel.model_size_or_path,
+                    device=whispermodel.device,
+                    compute_type=whispermodel.compute_type,
+                    language=language,
+                    vad_model=config.whisper.vad_model,
+                    vad_method=config.whisper.vad_method,
+                    vad_options=effective_vad_options,
+                    task=task,
+                )
+
         except Exception as e:
-            logger.warning(f"Standard safe loading failed ({e}). Falling back to weights_only=False.")
+            logger.warning(f"Safe load failed: {e}. Attempting unsafe load (weights_only=False).")
             
-            # Robust Monkey Patch for torch.load
-            original_load = torch.load
-            
+            # 4. Fallback yang lebih aman (JIKA safe globals masih gagal)
+            # Menggunakan fungsi biasa, bukan lambda, untuk menghindari KeyError/TypeError
             def unsafe_load(*args, **kwargs):
-                # Force weights_only=False to allow loading older pickled models
-                kwargs["weights_only"] = False
+                # Paksa parameter weights_only menjadi False
+                kwargs["weights_only"] = False 
                 return original_load(*args, **kwargs)
             
+            # Terapkan patch sementara
             torch.load = unsafe_load
+            
             try:
-                return _load_model_unsafe()
+                return whisperx_transcribe.load_model(
+                    whisper_arch=whispermodel.model_size_or_path,
+                    device=whispermodel.device,
+                    compute_type=whispermodel.compute_type,
+                    language=language,
+                    vad_model=config.whisper.vad_model,
+                    vad_method=config.whisper.vad_method,
+                    vad_options=effective_vad_options,
+                    task=task,
+                )
             finally:
-                # Always restore the original touch.load
+                # 5. PENTING: Kembalikan torch.load ke aslinya segera setelah selesai
                 torch.load = original_load
-
+                
     pipeline = await _get_or_init_model(
         key=str(key),
         cache_dict=transcribe_pipeline_instances,
