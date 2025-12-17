@@ -197,16 +197,31 @@ async def load_transcribe_pipeline_cached(
     )
 
     def _init_pipeline():
-        return whisperx_transcribe.load_model(
-            whisper_arch=whispermodel.model_size_or_path,
-            device=whispermodel.device,
-            compute_type=whispermodel.compute_type,
-            language=language,
-            vad_model=config.whisper.vad_model,
-            vad_method=config.whisper.vad_method,
-            vad_options=effective_vad_options,
-            task=task,
-        )
+        try:
+            from omegaconf.listconfig import ListConfig
+            with torch.serialization.safe_globals([ListConfig]):
+                return whisperx_transcribe.load_model(
+                    whisper_arch=whispermodel.model_size_or_path,
+                    device=whispermodel.device,
+                    compute_type=whispermodel.compute_type,
+                    language=language,
+                    vad_model=config.whisper.vad_model,
+                    vad_method=config.whisper.vad_method,
+                    vad_options=effective_vad_options,
+                    task=task,
+                )
+        except ImportError:
+            # Fallback if omegaconf is not installed (unlikely given the error)
+            return whisperx_transcribe.load_model(
+                whisper_arch=whispermodel.model_size_or_path,
+                device=whispermodel.device,
+                compute_type=whispermodel.compute_type,
+                language=language,
+                vad_model=config.whisper.vad_model,
+                vad_method=config.whisper.vad_method,
+                vad_options=effective_vad_options,
+                task=task,
+            )
 
     pipeline = await _get_or_init_model(
         key=str(key),
