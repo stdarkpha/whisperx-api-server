@@ -389,15 +389,28 @@ async def load_diarize_model_cached(model_name: str):
     config = get_config()
     inference_device = _determine_inference_device()
 
-    def _init_diarization():
-        logger.info(f"Loading diarization pipeline for model: {model_name} with device: {inference_device}")
-        return whisperx_diarize.DiarizationPipeline(model_name=model_name, device=inference_device)
+    async def _init_diarization():
+        def _load_diarize_unsafe():
+            logger.info(f"Loading diarization pipeline for model: {model_name} with device: {inference_device}")
+            return whisperx_diarize.DiarizationPipeline(model_name=model_name, device=inference_device)
+
+        # Wrap with unsafe loader because Pyannote uses older pickling (TorchVerify, etc)
+        original_load = torch.load
+        def unsafe_load(*args, **kwargs):
+            kwargs["weights_only"] = False
+            return original_load(*args, **kwargs)
+        
+        torch.load = unsafe_load
+        try:
+            return await asyncio.to_thread(_load_diarize_unsafe)
+        finally:
+            torch.load = original_load
 
     diarize_model = await _get_or_init_model(
         key=model_name,
         cache_dict=diarize_model_instances,
         lock_dict=diarization_locks,
-        init_func=lambda: asyncio.to_thread(_init_diarization),
+        init_func=_init_diarization,
         log_reuse="Reusing cached diarization model for: {key}",
         log_init="Initializing diarization model: {key}",
     )
