@@ -120,6 +120,7 @@ async def transcribe_audio(
     vad_offset: Annotated[float, Form()] = 0.363,
     no_speech_threshold: Annotated[float, Form()] = 0.6,
     logprob_threshold: Annotated[float, Form()] = -1.0,
+    beam_size: Annotated[int, Form()] = 5,
 ) -> Response:
     model, language, response_format = apply_defaults(config, model, language, response_format)
     timestamp_granularities = await get_timestamp_granularities(request)
@@ -143,7 +144,8 @@ async def transcribe_audio(
         vad_onset: {vad_onset}, \
         vad_offset: {vad_offset}, \
         no_speech_threshold: {no_speech_threshold}, \
-        logprob_threshold: {logprob_threshold}")
+        logprob_threshold: {logprob_threshold}, \
+        beam_size: {beam_size}")
     
     if not align:
         if response_format in ('vtt', 'srt', 'aud', 'vtt_json'):
@@ -170,6 +172,7 @@ async def transcribe_audio(
         "hotwords": hotwords,
         "no_speech_threshold": no_speech_threshold,
         "logprob_threshold": logprob_threshold,
+        "beam_size": beam_size,
     }
 
     model_load_time = time.time()
