@@ -6,12 +6,13 @@ services:
       dockerfile: Dockerfile.cuda
     healthcheck:
       test: ["CMD-SHELL", "curl --fail http://localhost:8000/healthcheck || exit 1"]
-    command: uvicorn --factory whisperx_api_server.main:create_app
+    command: uvicorn --factory whisperx_api_server.main:create_app --reload --host 0.0.0.0
     ports:
       - 8000:8000
     volumes:
       - hugging_face_cache:/root/.cache/huggingface
       - torch_cache:/root/.cache/torch
+      - ./src/whisperx_api_server:/workspace/whisperx_api_server
     deploy:
       resources:
         reservations:
@@ -24,6 +25,9 @@ services:
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
       - NVIDIA_DRIVER_CAPABILITIES=compute,utility
+      - PYTHONDONTWRITEBYTECODE=1
+      - WHISPER__MODEL=large-v3
+      - WHISPER__COMPUTE_TYPE=int8
   whisperx-api-server-cpu:
     image: whisperx-api-server-cpu
     build:
