@@ -12,7 +12,7 @@ services:
     volumes:
       - hugging_face_cache:/root/.cache/huggingface
       - torch_cache:/root/.cache/torch
-      - ./src/whisperx_api_server:/workspace/whisperx_api_server
+      - ./src/whisperx_api_server:/workspace/whisperx_api_server:Z
     deploy:
       resources:
         reservations:
