@@ -199,7 +199,9 @@ async def load_transcribe_pipeline_cached(
     def _init_pipeline():
         try:
             from omegaconf.listconfig import ListConfig
-            with torch.serialization.safe_globals([ListConfig]):
+            from omegaconf.dictconfig import DictConfig
+            from omegaconf.base import ContainerMetadata
+            with torch.serialization.safe_globals([ListConfig, DictConfig, ContainerMetadata]):
                 return whisperx_transcribe.load_model(
                     whisper_arch=whispermodel.model_size_or_path,
                     device=whispermodel.device,
@@ -211,7 +213,7 @@ async def load_transcribe_pipeline_cached(
                     task=task,
                 )
         except ImportError:
-            # Fallback if omegaconf is not installed (unlikely given the error)
+            # Fallback if omegaconf is not installed
             return whisperx_transcribe.load_model(
                 whisper_arch=whispermodel.model_size_or_path,
                 device=whispermodel.device,
