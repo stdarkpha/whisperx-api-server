@@ -198,9 +198,12 @@ async def load_transcribe_pipeline_cached(
 
     def _init_pipeline():
         try:
+            # Import semua class omegaconf yang mungkin ada di checkpoint
             from omegaconf.listconfig import ListConfig
             from omegaconf.dictconfig import DictConfig
             from omegaconf.base import ContainerMetadata
+            
+            # Tambahkan ContainerMetadata dan DictConfig ke safe_globals
             with torch.serialization.safe_globals([ListConfig, DictConfig, ContainerMetadata]):
                 return whisperx_transcribe.load_model(
                     whisper_arch=whispermodel.model_size_or_path,
@@ -213,7 +216,7 @@ async def load_transcribe_pipeline_cached(
                     task=task,
                 )
         except ImportError:
-            # Fallback if omegaconf is not installed
+            # Fallback (biasanya tidak terpanggil jika library terinstall)
             return whisperx_transcribe.load_model(
                 whisper_arch=whispermodel.model_size_or_path,
                 device=whispermodel.device,
@@ -224,6 +227,24 @@ async def load_transcribe_pipeline_cached(
                 vad_options=effective_vad_options,
                 task=task,
             )
+        except Exception as e:
+            # Fallback terakhir jika safe_globals gagal, coba monkey patch torch.load (Sangat berisiko, gunakan hanya jika terpaksa)
+            logger.warning(f"Standard loading failed, attempting unsafe load due to: {e}")
+            original_load = torch.load
+            torch.load = lambda *args, **kwargs: original_load(*args, **kwargs, weights_only=False)
+            try:
+                return whisperx_transcribe.load_model(
+                    whisper_arch=whispermodel.model_size_or_path,
+                    device=whispermodel.device,
+                    compute_type=whispermodel.compute_type,
+                    language=language,
+                    vad_model=config.whisper.vad_model,
+                    vad_method=config.whisper.vad_method,
+                    vad_options=effective_vad_options,
+                    task=task,
+                )
+            finally:
+                torch.load = original_load
 
     pipeline = await _get_or_init_model(
         key=str(key),
