@@ -179,15 +179,21 @@ async def load_transcribe_pipeline_cached(
     whispermodel: CustomWhisperModel,
     language: Optional[str] = None,
     task: str = "transcribe",
+    vad_options: Optional[dict] = None,
 ):
     config = get_config()
+    
+    effective_vad_options = config.whisper.vad_options.copy() if config.whisper.vad_options else {}
+    if vad_options:
+        effective_vad_options.update(vad_options)
+
     key = (
         whispermodel.model_size_or_path,
         whispermodel.device,
         whispermodel.compute_type,
         config.whisper.vad_method.value if hasattr(config.whisper.vad_method, "value") else config.whisper.vad_method,
         config.whisper.vad_model,
-        _hashable_vad_options(config.whisper.vad_options),
+        _hashable_vad_options(effective_vad_options),
     )
 
     def _init_pipeline():
@@ -198,7 +204,7 @@ async def load_transcribe_pipeline_cached(
             language=language,
             vad_model=config.whisper.vad_model,
             vad_method=config.whisper.vad_method,
-            vad_options=config.whisper.vad_options,
+            vad_options=effective_vad_options,
             task=task,
         )
 

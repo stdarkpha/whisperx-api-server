@@ -116,6 +116,8 @@ async def transcribe_audio(
     align: Annotated[bool, Form()] = True,
     diarize: Annotated[bool, Form()] = False,
     chunk_size: Annotated[int, Form()] = 30,
+    vad_onset: Annotated[float, Form()] = 0.500,
+    vad_offset: Annotated[float, Form()] = 0.363,
 ) -> Response:
     model, language, response_format = apply_defaults(config, model, language, response_format)
     timestamp_granularities = await get_timestamp_granularities(request)
@@ -135,7 +137,9 @@ async def transcribe_audio(
         highlight_words: {highlight_words}, \
         align: {align}, \
         diarize: {diarize}, \
-        chunk_size: {chunk_size}")
+        chunk_size: {chunk_size}, \
+        vad_onset: {vad_onset}, \
+        vad_offset: {vad_offset}")
     
     if not align:
         if response_format in ('vtt', 'srt', 'aud', 'vtt_json'):
@@ -168,6 +172,8 @@ async def transcribe_audio(
 
     logger.info(f"Loaded model {model} in {time.time() - model_load_time:.2f} seconds")
 
+    vad_options = {"onset": vad_onset, "offset": vad_offset}
+
     try:
         transcription = await transcriber.transcribe(
             audio_file=file,
@@ -177,7 +183,8 @@ async def transcribe_audio(
             align=align,
             diarize=diarize,
             chunk_size=chunk_size,
-            request_id=request_id
+            request_id=request_id,
+            vad_options=vad_options,
         )
     except Exception as e:
         logger.exception(f"Request ID: {request_id} - Transcription failed: {e}")

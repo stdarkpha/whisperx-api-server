@@ -165,6 +165,7 @@ async def transcribe(
     diarize: bool = False,
     request_id: str = "",
     task: str = "transcribe",
+    vad_options: dict = None,
 ) -> whisperx_types.TranscriptionResult:
     start_time = time.time()
     file_path = None
@@ -187,6 +188,7 @@ async def transcribe(
             whispermodel=whispermodel,
             language=language,
             task=task,
+            vad_options=vad_options,
         )
 
         logger.info(f"Request ID: {request_id} - Loading model took {time.time() - model_loading_start:.2f} seconds (cached)")
